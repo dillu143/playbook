@@ -1,0 +1,36 @@
+---
+  - hosts: s2
+
+    tasks:
+      - name: installing the git 
+        package:
+          name: git
+          state: present
+      - name: install httpd 
+        package:
+          name: httpd
+          state: present
+
+      - name: starting the httpd
+        service:
+          name: httpd
+          state: started
+
+
+      - name: enabled the httpd
+        service:
+          name: httpd
+          enabled: true
+
+
+      - name: git cloning
+        git:
+          repo: https://github.com/dillu143/food.git
+          dest: /var/www/html
+          force: yes
+
+
+      - name: restart the httpd
+        service:
+          name: httpd
+          state: restarted

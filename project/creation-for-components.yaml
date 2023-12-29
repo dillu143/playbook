@@ -1,0 +1,115 @@
+---
+ - hosts: all
+
+   tasks:
+   - name: create vpc 
+     amazon.aws.ec2_vpc_net:
+       name: project-vpc-4
+       cidr_block: 10.0.0.0/16
+       region: us-east-1
+       state: present
+     register: vpc1
+
+   - name: create igw
+     amazon.aws.ec2_vpc_igw:
+       vpc_id: "{{vpc1.vpc.id}}"
+       region: us-east-1
+       state: present
+       tags:
+         Name: project-igw-4
+     register: igw1
+  
+   - name: create public subnet1 
+     amazon.aws.ec2_vpc_subnet:
+       state: present
+       vpc_id: "{{vpc1.vpc.id}}"
+       map_public: true
+       cidr: 10.0.0.0/18
+       region: us-east-1
+       tags:
+         Name: pub-sub1-4
+     register: sub1
+
+   - name: create public subnet2
+     amazon.aws.ec2_vpc_subnet:
+       state: present
+       vpc_id: "{{vpc1.vpc.id}}"
+       map_public: true
+       cidr: 10.0.64.0/18
+       region: us-east-1
+       tags:
+         Name: pub-sub2-4
+     register: sub2
+
+   - name: create pri subnet
+     amazon.aws.ec2_vpc_subnet:
+       state: present
+       vpc_id: "{{vpc1.vpc.id}}"
+       map_public: false
+       cidr: 10.0.128.0/18
+       region: us-east-1
+       tags:
+         Name: pri-sub1-4
+     register: prisub 
+
+   - name: creating public route table
+     amazon.aws.ec2_vpc_route_table:
+       vpc_id: "{{vpc1.vpc.id}}"
+       region: us-east-1
+       subnets:
+         - "{{ sub1.subnet.id }}"
+         - "{{ sub2.subnet.id }}"
+       routes:
+         - dest: 0.0.0.0/0
+           gateway_id: "{{ igw1.gateway_id }}"
+       tags:
+         Name: "pub-route-4"
+     register: pubroute
+
+   - name: creating the security group
+     amazon.aws.ec2_security_group:
+       name: sg
+       description: My security group
+       vpc_id: "{{ vpc1.vpc.id }}"
+       region: us-east-1
+       state: present
+       tags:
+         Name: my-security-group
+       rules:
+         - proto: tcp
+           ports:
+             - 22
+             - 80
+           cidr_ip: 0.0.0.0/0
+       rules_egress:
+         - proto: all
+           cidr_ip: 0.0.0.0/0
+
+
+
+
+   - name: creating a key pair
+     amazon.aws.ec2_key:
+       name: my_keypair
+       state: present
+       region: us-east-1
+     no_log: false
+     register: key_pair
+
+
+
+   - name: start an instance with a public IP address
+     amazon.aws.ec2_instance:
+       name: public instance
+       state: present
+       region: us-east-1
+       key_name: my_keypair
+       vpc_subnet_id: "{{sub1.subnet.id}}"
+       instance_type: t2.micro
+       security_group: sg
+       network:
+         assign_public_ip: true
+       image_id: ami-079db87dc4c10ac91
+       user_data: "{{ lookup('file', '/home/ec2-user/userdata.sh') }}"
+       tags:
+         Name: public-instance
